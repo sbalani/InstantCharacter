@@ -17,3 +17,4 @@ urllib3==1.26.15
 kornia
 sentencepiece
 timm==0.9.16
+hf_transfer
