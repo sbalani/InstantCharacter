@@ -13,3 +13,5 @@ models/version.txt
 venv/
 models/models--ZhengPeng7--BiRefNet/
 models/modules/
+models/models--*
+tmp
