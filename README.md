@@ -36,9 +36,6 @@ InstantCharacter is an innovative, tuning-free method designed to achieve charac
 
 <img src='assets/1_lite.png'>
 
-<img src='assets/show.png'>
-
-
 
 <!-- | reference | flux | + lora-ghibli | + lora-makoto |
 |:-----:|:-----:|:-----:|:-----:|
@@ -192,6 +189,8 @@ Animal character are relatively unstable.
 <div align="center">
   <img src='assets/thanks_jyduan.jpg' style='width:300px;'>
 </div>
+
+<img src='assets/show.png'>
 
 
 
