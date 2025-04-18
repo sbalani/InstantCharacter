@@ -36,6 +36,8 @@ InstantCharacter is an innovative, tuning-free method designed to achieve charac
 
 <img src='assets/1_lite.png'>
 
+<img src='assets/show.png'>
+
 
 
 <!-- | reference | flux | + lora-ghibli | + lora-makoto |
