@@ -1,7 +1,7 @@
-diffusers>=0.32.2
+diffusers
 torch>=2.0.0
 torchvision>=0.15.1
-transformers==4.46.3
+transformers
 accelerate
 safetensors
 einops
@@ -18,3 +18,5 @@ kornia
 sentencepiece
 timm==0.9.16
 hf_transfer
+protobuf
+optimum-quanto
