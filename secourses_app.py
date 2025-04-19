@@ -212,29 +212,11 @@ def create_image(input_image,
 
 # Description
 title = r"""
-<h1 align="center">InstantCharacter : Personalize Any Characters with a Scalable Diffusion Transformer Framework</h1>
+InstantCharacter SECourses Improved App V1
 """
 
 description = r"""
-<b>Official 🤗 Gradio demo</b> for <a href='https://instantcharacter.github.io/' target='_blank'><b>InstantCharacter : Personalize Any Characters with a Scalable Diffusion Transformer Framework</b></a>.<br>
-How to use:<br>
-1. Upload a character image, removing background would be preferred.
-2. Enter a text prompt to describe what you hope the chracter does.
-3. Click the <b>Submit</b> button to begin customization.
-4. Share your custimized photo with your friends and enjoy! 😊
-"""
-
-article = r"""
----
-📝 **Citation**
-<br>
-If our work is helpful for your research or applications, please cite us via:
-```bibtex
-TBD
-```
-📧 **Contact**
-<br>
-If you have any questions, please feel free to open an issue.
+InstantCharacter SECourses Improved App V1 - https://www.patreon.com/posts/126995127
 """
 
 block = gr.Blocks(css="footer {visibility: hidden}").queue(max_size=10, api_open=False)
@@ -293,8 +275,6 @@ with block:
         outputs=[generated_image],
         cache_examples=True,
     )
-    
-    gr.Markdown(article)
 
 if __name__ == '__main__':
     import argparse
