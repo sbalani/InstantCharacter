@@ -1,6 +1,7 @@
 import torch
 import random
 import numpy as np
+import os
 from PIL import Image
 
 import gradio as gr
@@ -23,6 +24,9 @@ image_encoder_2_path = 'facebook/dinov2-giant'
 birefnet_path = 'ZhengPeng7/BiRefNet'
 makoto_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", filename="Makoto_Shinkai_style.safetensors")
 ghibli_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", filename="ghibli_style.safetensors")
+
+# Create assets directory if it doesn't exist
+os.makedirs("assets", exist_ok=True)
 
 # init InstantCharacter pipeline
 pipe = InstantCharacterFluxPipeline.from_pretrained(base_model, torch_dtype=torch.bfloat16)
@@ -137,24 +141,22 @@ def randomize_seed_fn(seed: int, randomize_seed: bool) -> int:
     return seed
 
 def get_example():
-    case = [
+    return [
         [
-            "./assets/girl.jpg",
+            "assets/girl.jpg",
             "A girl is playing a guitar in street",
             0.9,
             'Makoto Shinkai style',
         ],
         [
-            "./assets/boy.jpg",
+            "assets/boy.jpg",
             "A boy is riding a bike in snow",
             0.9,
             'Makoto Shinkai style',
         ],
     ]
-    return case
 
 def run_for_examples(source_image, prompt, scale, style_mode):
-
     return create_image(
         input_image=source_image,
         prompt=prompt,
@@ -173,9 +175,13 @@ def create_image(input_image,
                  seed,
                  style_mode=None):
     
+    if input_image is None:
+        return None
+    
     input_image = remove_bkg(input_image)
-
-    if style_mode is None:
+    
+    # Fix for style_mode handling
+    if style_mode == "None" or style_mode is None:
         images = pipe(
             prompt=prompt, 
             num_inference_steps=num_inference_steps,
@@ -193,6 +199,18 @@ def create_image(input_image,
         elif style_mode == 'Ghibli style':
             lora_file_path = ghibli_style_lora_path
             trigger = 'ghibli style'
+        else:
+            # Default to no style if not recognized
+            return pipe(
+                prompt=prompt, 
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                width=1024,
+                height=1024,
+                subject_image=input_image,
+                subject_scale=scale,
+                generator=torch.manual_seed(seed),
+            ).images
 
         images = pipe.with_style_lora(
             lora_file_path=lora_file_path,
@@ -206,16 +224,14 @@ def create_image(input_image,
             subject_scale=scale,
             generator=torch.manual_seed(seed),
         ).images
-
     
     return images
 
 description = r"""
-InstantCharacter SECourses Improved App V1 - https://www.patreon.com/posts/126995127
+InstantCharacter SECourses Improved App V3 - https://www.patreon.com/posts/126995127
 """
 
-block = gr.Blocks(css="footer {visibility: hidden}").queue(max_size=10, api_open=False)
-with block:
+with gr.Blocks(css="footer {visibility: hidden}") as block:
     
     gr.Markdown(description)
     
@@ -229,12 +245,19 @@ with block:
                 
                 prompt = gr.Textbox(label="Prompt", value="a character is riding a bike in snow")
                 
-                scale = gr.Slider(minimum=0, maximum=1.5, step=0.01,value=1.0, label="Scale")
-                style_mode = gr.Dropdown(label='Style', choices=[None, 'Makoto Shinkai style', 'Ghibli style'], value='Makoto Shinkai style')
+                scale = gr.Slider(minimum=0, maximum=1.5, step=0.01, value=1.0, label="Scale")
+                # Fix style dropdown
+                style_mode = gr.Dropdown(
+                    label='Style', 
+                    choices=["None", 'Makoto Shinkai style', 'Ghibli style'], 
+                    value='Makoto Shinkai style'
+                )
                 
-                with gr.Accordion(open=False, label="Advanced Options"):
-                    guidance_scale = gr.Slider(minimum=1,maximum=7.0, step=0.01,value=3.5, label="guidance scale")
-                    num_inference_steps = gr.Slider(minimum=5,maximum=50.0, step=1.0,value=28, label="num inference steps")
+                # Fix accordion
+                advanced_options = gr.Accordion("Advanced Options", open=False)
+                with advanced_options:
+                    guidance_scale = gr.Slider(minimum=1, maximum=7.0, step=0.01, value=3.5, label="Guidance Scale")
+                    num_inference_steps = gr.Slider(minimum=5, maximum=50.0, step=1.0, value=28, label="Num Inference Steps")
                     seed = gr.Slider(minimum=-1000000, maximum=1000000, value=123456, step=1, label="Seed Value")
                     randomize_seed = gr.Checkbox(label="Randomize seed", value=True)
                     
@@ -243,30 +266,34 @@ with block:
             with gr.Column():
                 generated_image = gr.Gallery(label="Generated Image")
 
-        generate_button.click(
-            fn=randomize_seed_fn,
-            inputs=[seed, randomize_seed],
-            outputs=seed,
-            queue=False,
-            api_name=False,
-        ).then(
-            fn=create_image,
-            inputs=[image_pil,
-                    prompt,
-                    scale, 
-                    guidance_scale,
-                    num_inference_steps,
-                    seed,
-                    style_mode,
-                    ], 
-            outputs=[generated_image])
+        # Fix examples
+        example_images = get_example()
+        gr.Examples(
+            examples=example_images,
+            inputs=[image_pil, prompt, scale, style_mode],
+            outputs=generated_image,
+            fn=run_for_examples,
+            cache_examples=False,
+        )
     
-    gr.Examples(
-        examples=get_example(),
-        inputs=[image_pil, prompt, scale, style_mode],
-        fn=run_for_examples,
-        outputs=[generated_image],
-        cache_examples=False,
+    # Fix event handling
+    generate_button.click(
+        fn=randomize_seed_fn,
+        inputs=[seed, randomize_seed],
+        outputs=seed,
+        queue=False,
+    ).then(
+        fn=create_image,
+        inputs=[
+            image_pil,
+            prompt,
+            scale, 
+            guidance_scale,
+            num_inference_steps,
+            seed,
+            style_mode,
+        ], 
+        outputs=generated_image
     )
 
 if __name__ == '__main__':
@@ -275,4 +302,5 @@ if __name__ == '__main__':
     parser.add_argument('--share', action='store_true', help='Enable Gradio sharing')
     args = parser.parse_args()
     
+    block.queue(max_size=10)
     block.launch(inbrowser=True, share=args.share)
