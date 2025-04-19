@@ -439,7 +439,8 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
             image_pil = gr.Image(
                 label="Source Character Image",
                 type='pil',
-                height=640
+                height=700,
+                width=700
                 # Removed fixed height to allow natural aspect ratio
                 # height=400 # <-- Removed this
             )
@@ -483,7 +484,8 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
                 object_fit="contain",
                 columns=2, # Show potentially multiple images side-by-side
                 preview=True, # Allow clicking image for larger view,
-                height=640
+                height=700,
+                width=700
             )
             open_folder_button = gr.Button("Open Outputs Folder")
                         # --- Advanced Options ---
