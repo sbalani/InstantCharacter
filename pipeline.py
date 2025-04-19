@@ -547,4 +547,3 @@ class InstantCharacterFluxPipeline(FluxPipeline):
         res = self.__call__(*args, **kwargs)
         flux_load_lora(self, lora_file_path, -lora_weight)
         return res
-
