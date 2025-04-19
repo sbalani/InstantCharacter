@@ -7,6 +7,7 @@ import os
 import time # Added for unique filenames
 import platform # Added for opening folder
 import subprocess # Added for opening folder
+import glob # Added for finding LoRA files
 from PIL import Image
 
 import gradio as gr
@@ -25,6 +26,7 @@ except ImportError:
 # --- Global Variables and Setup ---
 MAX_SEED = np.iinfo(np.int32).max
 OUTPUT_DIR = "outputs" # Define output directory name
+LORAS_DIR = "loras" # Define LoRAs directory name
 
 # Determine device and dtype
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -42,6 +44,10 @@ print(f"Using dtype: {dtype}")
 print(f"Ensuring output directory '{OUTPUT_DIR}' exists...")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# Create LoRAs directory
+print(f"Ensuring LoRAs directory '{LORAS_DIR}' exists...")
+os.makedirs(LORAS_DIR, exist_ok=True)
+
 # --- Model Loading ---
 print("Downloading/Loading weights...")
 # Use try-except blocks for better error handling during download/load
@@ -51,8 +57,41 @@ try:
     image_encoder_path = 'google/siglip-so400m-patch14-384'
     image_encoder_2_path = 'facebook/dinov2-giant'
     birefnet_path = 'ZhengPeng7/BiRefNet'
-    makoto_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", filename="Makoto_Shinkai_style.safetensors")
-    ghibli_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", filename="ghibli_style.safetensors")
+    
+    # Download default LoRAs into the loras folder
+    makoto_lora_filename = "Makoto_Shinkai_style.safetensors"
+    ghibli_lora_filename = "ghibli_style.safetensors"
+    ghibli_anime_lora_filename = "Ghibli_Anime_Art_Style.safetensors"
+    
+    # Import shutil for file copying
+    import shutil
+    
+    # Download default LoRAs if they don't already exist in the loras folder
+    makoto_style_lora_path = os.path.join(LORAS_DIR, makoto_lora_filename)
+    if not os.path.exists(makoto_style_lora_path):
+        print(f"Downloading Makoto Shinkai style LoRA to {LORAS_DIR}...")
+        downloaded_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", 
+                                         filename=makoto_lora_filename)
+        # Copy the downloaded file to our loras directory
+        shutil.copy(downloaded_path, makoto_style_lora_path)
+    
+    ghibli_style_lora_path = os.path.join(LORAS_DIR, ghibli_lora_filename)
+    if not os.path.exists(ghibli_style_lora_path):
+        print(f"Downloading Ghibli style LoRA to {LORAS_DIR}...")
+        downloaded_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", 
+                                         filename=ghibli_lora_filename)
+        # Copy the downloaded file to our loras directory
+        shutil.copy(downloaded_path, ghibli_style_lora_path)
+    
+    # Add the new Ghibli Anime Art Style LoRA
+    ghibli_anime_style_lora_path = os.path.join(LORAS_DIR, ghibli_anime_lora_filename)
+    if not os.path.exists(ghibli_anime_style_lora_path):
+        print(f"Downloading Ghibli Anime Art Style LoRA to {LORAS_DIR}...")
+        downloaded_path = hf_hub_download(repo_id="BestModelsv2/flux_loras", 
+                                         filename=ghibli_anime_lora_filename)
+        # Copy the downloaded file to our loras directory
+        shutil.copy(downloaded_path, ghibli_anime_style_lora_path)
+    
 except Exception as e:
     print(f"Error downloading or finding model weights: {e}")
     print("Please check your internet connection and Hugging Face Hub access.")
@@ -107,6 +146,52 @@ except Exception as e:
     print(f"Error loading matting model: {e}")
     exit()
 print("Matting model loaded.")
+
+# --- LoRA Management Functions ---
+
+def get_available_loras():
+    """Scans the LoRAs directory for .safetensors files and returns a list of available LoRAs."""
+    lora_files = glob.glob(os.path.join(LORAS_DIR, "*.safetensors"))
+    # Extract just the filename without extension for display
+    lora_names = ["None"]  # Always include "None" as an option
+    
+    # Add filename (without extension) -> full path mapping for each LoRA file
+    lora_mapping = {}
+    
+    for lora_path in lora_files:
+        filename = os.path.basename(lora_path)
+        name_no_ext = os.path.splitext(filename)[0]
+        # Replace underscores with spaces and title case for nicer display
+        display_name = name_no_ext.replace('_', ' ').title()
+        lora_names.append(display_name)
+        lora_mapping[display_name] = lora_path
+    
+    return lora_names, lora_mapping
+
+# Initial scan for LoRAs
+available_loras, lora_path_mapping = get_available_loras()
+print(f"Found {len(available_loras)-1} LoRA files in {LORAS_DIR}")
+
+def refresh_loras():
+    """Rescans the LoRAs directory and updates the global variables."""
+    global available_loras, lora_path_mapping
+    available_loras, lora_path_mapping = get_available_loras()
+    print(f"Refreshed LoRA list: Found {len(available_loras)-1} LoRA files")
+    return gr.Dropdown.update(choices=available_loras, value="None" if "None" in available_loras else available_loras[0])
+
+def open_loras_folder():
+    """Opens the LoRAs folder in the file explorer."""
+    print(f"Opening LoRAs folder: {LORAS_DIR}")
+    try:
+        if platform.system() == "Windows":
+            os.startfile(os.path.abspath(LORAS_DIR))
+        elif platform.system() == "Darwin":  # macOS
+            subprocess.run(["open", os.path.abspath(LORAS_DIR)], check=True)
+        else:  # Linux and other Unix-like
+            subprocess.run(["xdg-open", os.path.abspath(LORAS_DIR)], check=True)
+    except Exception as e:
+        print(f"Error opening LoRAs folder: {e}")
+        gr.Warning(f"Could not open LoRAs folder: {e}")
 
 # --- Helper Functions ---
 
@@ -213,13 +298,16 @@ def get_example():
     examples = []
     base_examples = [
         [
-            "assets/boy2.jpg", "A man is playing a guitar in street, detailed illustration", 0.9, 'Makoto Shinkai style'
+            "assets/boy2.jpg", "A man is playing a guitar in street, detailed illustration", 0.9, 'Makoto Shinkai Style'
         ],
         [
-            "assets/boy.jpg", "A man is riding a bike in snow, cinematic lighting", 0.9, 'Makoto Shinkai style'
+            "assets/boy.jpg", "A man is riding a bike in snow, cinematic lighting", 0.9, 'Makoto Shinkai Style'
         ],
         [
-            "assets/boy2.jpg", "A man is reading a book under a large tree, Ghibli style", 1.0, 'Ghibli style'
+            "assets/boy2.jpg", "A man is reading a book under a large tree, Ghibli style", 1.0, 'Ghibli Style'
+        ],
+        [
+            "assets/boy.jpg", "A man in autumn landscape with falling leaves, dreamy atmosphere", 1.0, 'Ghibli Anime Art Style'
         ],
         [
             "assets/boy.jpg", "photo of a man holding a camera", 1.1, 'None'
@@ -357,19 +445,32 @@ def run_generation_loop(input_image,
                 print("Generating image without specific style LoRA...")
                 images_batch = pipe(**common_args).images
             else:
+                # Look up the LoRA path from our mapping
+                global lora_path_mapping
                 lora_file_path = None
                 trigger = None
-                if style_mode == 'Makoto Shinkai style':
-                    lora_file_path = makoto_style_lora_path
-                    trigger = 'Makoto Shinkai style'
-                elif style_mode == 'Ghibli style':
-                    lora_file_path = ghibli_style_lora_path
-                    trigger = 'ghibli style'
+                
+                # Try to find the LoRA file path in our mapping
+                if style_mode in lora_path_mapping:
+                    lora_file_path = lora_path_mapping[style_mode]
+                    trigger = style_mode.lower()  # Use the display name as trigger
+                    print(f"Using LoRA file: {lora_file_path}")
+                else:
+                    # Try legacy style lookup for backward compatibility
+                    if style_mode == 'Makoto Shinkai Style':
+                        lora_file_path = os.path.join(LORAS_DIR, "Makoto_Shinkai_style.safetensors")
+                        trigger = 'Makoto Shinkai style'
+                    elif style_mode == 'Ghibli Style':
+                        lora_file_path = os.path.join(LORAS_DIR, "ghibli_style.safetensors")
+                        trigger = 'ghibli style'
+                    elif style_mode == 'Ghibli Anime Art Style':
+                        lora_file_path = os.path.join(LORAS_DIR, "Ghibli_Anime_Art_Style.safetensors")
+                        trigger = 'ghibli anime art style'
 
-                if lora_file_path and trigger:
+                if lora_file_path and os.path.exists(lora_file_path):
                     print(f"Generating image with style: {style_mode}")
                     # Add trigger phrase if not already present (case-insensitive check)
-                    if trigger.lower() not in common_args["prompt"].lower():
+                    if trigger and trigger.lower() not in common_args["prompt"].lower():
                         final_prompt = f"{common_args['prompt']}, {trigger}"
                         print(f"Adding trigger phrase to prompt: '{trigger}'")
                         common_args["prompt"] = final_prompt
@@ -380,8 +481,8 @@ def run_generation_loop(input_image,
                         **common_args
                     ).images
                 else:
-                    # Fallback if style selected but not configured correctly
-                    print(f"Warning: Style '{style_mode}' selected but LoRA path/trigger missing. Generating without style LoRA.")
+                    # Fallback if style selected but file doesn't exist
+                    print(f"Warning: Style '{style_mode}' selected but LoRA file '{lora_file_path}' not found. Generating without style LoRA.")
                     images_batch = pipe(**common_args).images
 
 
@@ -419,7 +520,7 @@ def run_generation_loop(input_image,
 
 # --- Gradio UI Definition ---
 description = r"""
-InstantCharacter SECourses Improved App V7 - https://www.patreon.com/posts/126995127
+InstantCharacter SECourses Improved App V8 - https://www.patreon.com/posts/126995127
 """
 
 css = """
@@ -459,13 +560,17 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
                     info="Adherence to source (0=ignore, 1.5=max).",
                     scale=1 # Give equal space in the row
                 )
-                style_mode = gr.Dropdown(
+                style_dropdown = gr.Dropdown(
                     label='Artistic Style',
-                    choices=["None", 'Makoto Shinkai style', 'Ghibli style'],
-                    value='Makoto Shinkai style', # Default style
-                    info="Select style LoRA or None.",
+                    choices=available_loras,
+                    value='None' if 'None' in available_loras else available_loras[0], # Default to None if available
+                    info="Select LoRA style or None.",
                     scale=1 # Give equal space in the row
                 )
+            
+            with gr.Row():
+                refresh_loras_button = gr.Button("🔄 Refresh LoRAs", scale=1)
+                open_loras_button = gr.Button("📁 Open LoRAs Folder", scale=1)
 
             num_generations = gr.Number(
                 label="Number of Generations",
@@ -521,7 +626,7 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
     if example_list:
         gr.Examples(
             examples=example_list,
-            inputs=[image_pil, prompt, scale, style_mode], # Match inputs to the function
+            inputs=[image_pil, prompt, scale, style_dropdown], # Match inputs to the function
             outputs=[generated_image], # Match output components (only gallery needed for examples)
             fn=run_for_examples,
             cache_examples=False, # Re-run examples for consistency if needed
@@ -543,7 +648,7 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
             num_inference_steps,
             seed,
             randomize_seed,
-            style_mode,
+            style_dropdown,
             num_generations,
         ],
         outputs=[generated_image, seed], # Update gallery and the seed slider
@@ -556,6 +661,20 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
         fn=lambda: open_folder(OUTPUT_DIR), # Call the helper function
         inputs=[], # No inputs needed
         outputs=[] # No Gradio outputs to update
+    )
+    
+    # Button to open the LoRAs folder
+    open_loras_button.click(
+        fn=open_loras_folder,
+        inputs=[],
+        outputs=[]
+    )
+    
+    # Button to refresh the LoRAs list
+    refresh_loras_button.click(
+        fn=refresh_loras,
+        inputs=[],
+        outputs=[style_dropdown]
     )
 
 print("Gradio interface built.")
