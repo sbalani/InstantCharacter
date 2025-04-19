@@ -14,7 +14,7 @@ from pipeline import InstantCharacterFluxPipeline
 # global variable
 MAX_SEED = np.iinfo(np.int32).max
 device = "cuda" if torch.cuda.is_available() else "cpu"
-dtype = torch.float16 if str(device).__contains__("cuda") else torch.float32
+dtype = torch.float16 if device == "cuda" else torch.float32
 
 # pre-trained weights
 ip_adapter_path = hf_hub_download(repo_id="Tencent/InstantCharacter", filename="instantcharacter_ip-adapter.bin")
@@ -41,7 +41,7 @@ pipe.init_adapter(
 
 # load matting model
 birefnet = AutoModelForImageSegmentation.from_pretrained(birefnet_path, trust_remote_code=True)
-birefnet.to('cuda')
+birefnet.to(device)
 birefnet.eval()
 birefnet_transform_image = transforms.Compose([
     transforms.Resize((1024, 1024)),
@@ -49,12 +49,10 @@ birefnet_transform_image = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-
 def remove_bkg(subject_image):
 
     def infer_matting(img_pil):
-        input_images = birefnet_transform_image(img_pil).unsqueeze(0).to('cuda')
-
+        input_images = birefnet_transform_image(img_pil).unsqueeze(0).to(device)
         with torch.no_grad():
             preds = birefnet(input_images)[-1].sigmoid().cpu()
         pred = preds[0].squeeze()
@@ -99,16 +97,13 @@ def remove_bkg(subject_image):
 
         return [x1, y1, x2, y2]
 
-    def pad_to_square(image, pad_value = 255, random = False):
-        '''
-            image: np.array [h, w, 3]
-        '''
+    def pad_to_square(image, pad_value = 255, randomize = False):
         H,W = image.shape[0], image.shape[1]
         if H == W:
             return image
 
         padd = abs(H - W)
-        if random:
+        if randomize:
             padd_1 = int(np.random.randint(0,padd))
         else:
             padd_1 = int(padd / 2)
@@ -134,11 +129,10 @@ def remove_bkg(subject_image):
     subject_image = Image.fromarray(crop_pad_obj_image.astype(np.uint8))
     return subject_image
 
-
 def randomize_seed_fn(seed: int, randomize_seed: bool) -> int:
     if randomize_seed:
-        seed = random.randint(0, MAX_SEED)
-    return seed
+        return random.randint(0, MAX_SEED)
+    return int(seed)
 
 def get_example():
     return [
@@ -157,7 +151,7 @@ def get_example():
     ]
 
 def run_for_examples(source_image, prompt, scale, style_mode):
-    return create_image(
+    images = create_image(
         input_image=source_image,
         prompt=prompt,
         scale=scale,
@@ -166,31 +160,32 @@ def run_for_examples(source_image, prompt, scale, style_mode):
         seed=123456,
         style_mode=style_mode,
     )
+    # Gallery expects list of images
+    return images if isinstance(images, list) else [images]
 
-def create_image(input_image,
-                 prompt,
-                 scale, 
-                 guidance_scale,
-                 num_inference_steps,
-                 seed,
-                 style_mode=None):
-    
+def create_image(
+    input_image,
+    prompt,
+    scale, 
+    guidance_scale,
+    num_inference_steps,
+    seed,
+    style_mode=None
+):
     if input_image is None:
         return None
-    
     input_image = remove_bkg(input_image)
-    
-    # Fix for style_mode handling
+    # Style handling
     if style_mode == "None" or style_mode is None:
         images = pipe(
             prompt=prompt, 
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
+            num_inference_steps=int(num_inference_steps),
+            guidance_scale=float(guidance_scale),
             width=1024,
             height=1024,
             subject_image=input_image,
-            subject_scale=scale,
-            generator=torch.manual_seed(seed),
+            subject_scale=float(scale),
+            generator=torch.manual_seed(int(seed)),
         ).images
     else:
         if style_mode == 'Makoto Shinkai style':
@@ -200,100 +195,86 @@ def create_image(input_image,
             lora_file_path = ghibli_style_lora_path
             trigger = 'ghibli style'
         else:
-            # Default to no style if not recognized
             return pipe(
                 prompt=prompt, 
-                num_inference_steps=num_inference_steps,
-                guidance_scale=guidance_scale,
+                num_inference_steps=int(num_inference_steps),
+                guidance_scale=float(guidance_scale),
                 width=1024,
                 height=1024,
                 subject_image=input_image,
-                subject_scale=scale,
-                generator=torch.manual_seed(seed),
+                subject_scale=float(scale),
+                generator=torch.manual_seed(int(seed)),
             ).images
 
         images = pipe.with_style_lora(
             lora_file_path=lora_file_path,
             trigger=trigger,
             prompt=prompt, 
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
+            num_inference_steps=int(num_inference_steps),
+            guidance_scale=float(guidance_scale),
             width=1024,
             height=1024,
             subject_image=input_image,
-            subject_scale=scale,
-            generator=torch.manual_seed(seed),
+            subject_scale=float(scale),
+            generator=torch.manual_seed(int(seed)),
         ).images
-    
-    return images
+    # Ensure output is a list (for Gallery)
+    return images if isinstance(images, list) else [images]
 
 description = r"""
-InstantCharacter SECourses Improved App V3 - https://www.patreon.com/posts/126995127
+**InstantCharacter SECourses Improved App V4**  
+[https://www.patreon.com/posts/126995127](https://www.patreon.com/posts/126995127)
 """
 
-with gr.Blocks(css="footer {visibility: hidden}") as block:
-    
+with gr.Blocks(css="footer {visibility: hidden;}") as block:
     gr.Markdown(description)
-    
-    with gr.Tabs():
-        with gr.Row():
-            with gr.Column():
-                
-                with gr.Row():
-                    with gr.Column():
-                        image_pil = gr.Image(label="Source Image", type='pil')
-                
-                prompt = gr.Textbox(label="Prompt", value="a character is riding a bike in snow")
-                
-                scale = gr.Slider(minimum=0, maximum=1.5, step=0.01, value=1.0, label="Scale")
-                # Fix style dropdown
-                style_mode = gr.Dropdown(
-                    label='Style', 
-                    choices=["None", 'Makoto Shinkai style', 'Ghibli style'], 
-                    value='Makoto Shinkai style'
-                )
-                
-                # Fix accordion
-                advanced_options = gr.Accordion("Advanced Options", open=False)
-                with advanced_options:
-                    guidance_scale = gr.Slider(minimum=1, maximum=7.0, step=0.01, value=3.5, label="Guidance Scale")
-                    num_inference_steps = gr.Slider(minimum=5, maximum=50.0, step=1.0, value=28, label="Num Inference Steps")
-                    seed = gr.Slider(minimum=-1000000, maximum=1000000, value=123456, step=1, label="Seed Value")
-                    randomize_seed = gr.Checkbox(label="Randomize seed", value=True)
-                    
-                generate_button = gr.Button("Generate Image")
-                
-            with gr.Column():
-                generated_image = gr.Gallery(label="Generated Image")
+    with gr.Row():
+        with gr.Column(scale=1):
+            image_pil = gr.Image(label="Source Image", type='pil')
+            prompt = gr.Textbox(label="Prompt", value="a character is riding a bike in snow")
+            scale = gr.Slider(minimum=0, maximum=1.5, step=0.01, value=1.0, label="Scale")
+            style_mode = gr.Dropdown(
+                label='Style',
+                choices=["None", "Makoto Shinkai style", "Ghibli style"],
+                value='Makoto Shinkai style'
+            )
+            with gr.Accordion("Advanced Options", open=False):
+                guidance_scale = gr.Slider(minimum=1, maximum=7.0, step=0.01, value=3.5, label="Guidance Scale")
+                num_inference_steps = gr.Slider(minimum=5, maximum=50, step=1, value=28, label="Num Inference Steps")
+                seed = gr.Number(value=123456, label="Seed Value", precision=0)
+                randomize_seed = gr.Checkbox(label="Randomize seed", value=True)
+            generate_button = gr.Button("Generate Image")
+        with gr.Column(scale=1):
+            generated_image = gr.Gallery(label="Generated Image", show_label=True, elem_id="gallery").style(grid=(1, 2))
+    # Place Examples outside of row/column for proper display
+    gr.Examples(
+        examples=get_example(),
+        inputs=[image_pil, prompt, scale, style_mode],
+        outputs=generated_image,
+        fn=run_for_examples,
+        cache_examples=False,
+    )
 
-        # Fix examples
-        example_images = get_example()
-        gr.Examples(
-            examples=example_images,
-            inputs=[image_pil, prompt, scale, style_mode],
-            outputs=generated_image,
-            fn=run_for_examples,
-            cache_examples=False,
+    # Button logic: first, randomize seed, then generate
+    def generate_with_random_seed(
+        input_image, prompt, scale, guidance_scale, num_inference_steps, seed, randomize_seed, style_mode
+    ):
+        new_seed = randomize_seed_fn(seed, randomize_seed)
+        images = create_image(
+            input_image=input_image,
+            prompt=prompt,
+            scale=scale,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps,
+            seed=new_seed,
+            style_mode=style_mode,
         )
-    
-    # Fix event handling
+        return images
+
     generate_button.click(
-        fn=randomize_seed_fn,
-        inputs=[seed, randomize_seed],
-        outputs=seed,
-        queue=False,
-    ).then(
-        fn=create_image,
-        inputs=[
-            image_pil,
-            prompt,
-            scale, 
-            guidance_scale,
-            num_inference_steps,
-            seed,
-            style_mode,
-        ], 
-        outputs=generated_image
+        generate_with_random_seed,
+        inputs=[image_pil, prompt, scale, guidance_scale, num_inference_steps, seed, randomize_seed, style_mode],
+        outputs=generated_image,
     )
 
 if __name__ == '__main__':
@@ -301,6 +282,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run InstantCharacter Gradio app')
     parser.add_argument('--share', action='store_true', help='Enable Gradio sharing')
     args = parser.parse_args()
-    
     block.queue(max_size=10)
     block.launch(inbrowser=True, share=args.share)
