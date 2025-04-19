@@ -435,12 +435,11 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
 
     with gr.Row():
         # --- Left Column: Inputs ---
-        with gr.Column(scale=1):
+        with gr.Column():
             image_pil = gr.Image(
                 label="Source Character Image",
                 type='pil',
-                height=700,
-                width=700
+                height=640
                 # Removed fixed height to allow natural aspect ratio
                 # height=400 # <-- Removed this
             )
@@ -477,15 +476,14 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
 
 
         # --- Right Column: Outputs ---
-        with gr.Column(scale=1):
+        with gr.Column():
             generated_image = gr.Gallery(
                 label="Generated Image(s)",
                 # height=512, # Auto height might be better with Gallery
                 object_fit="contain",
                 columns=2, # Show potentially multiple images side-by-side
                 preview=True, # Allow clicking image for larger view,
-                height=700,
-                width=700
+                height=640
             )
             open_folder_button = gr.Button("Open Outputs Folder")
                         # --- Advanced Options ---
