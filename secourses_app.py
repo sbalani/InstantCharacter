@@ -8,6 +8,7 @@ import time # Added for unique filenames
 import platform # Added for opening folder
 import subprocess # Added for opening folder
 import glob # Added for finding LoRA files
+import gc # Added for garbage collection
 from PIL import Image
 
 import gradio as gr
@@ -509,10 +510,26 @@ def run_generation_loop(input_image,
         # --- Update Seed for Next Iteration ---
         if not randomize_seed:
             current_seed += 1 # Increment seed for the next non-random run
+            
+        # --- Clear CUDA cache to prevent VRAM leaks ---
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            print("CUDA cache cleared")
+            
+        # --- Run garbage collection to free memory ---
+        gc.collect()
+        print("Memory garbage collection performed")
+        
+        # Sleep a tiny bit to ensure memory is properly released
+        time.sleep(0.5)
 
 
     print(f"--- Generation loop finished. Total images generated: {len(all_generated_images)} ---")
 
+    # Final cleanup after all generations
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        
     # Return all collected images and the *next* seed if not randomized
     next_seed = current_seed if not randomize_seed else seed # Return the potentially incremented seed
     return all_generated_images, next_seed
@@ -520,7 +537,7 @@ def run_generation_loop(input_image,
 
 # --- Gradio UI Definition ---
 description = r"""
-InstantCharacter SECourses Improved App V9 - https://www.patreon.com/posts/126995127
+InstantCharacter SECourses Improved App V10 - https://www.patreon.com/posts/126995127
 """
 
 css = """
