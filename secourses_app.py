@@ -439,7 +439,8 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
             image_pil = gr.Image(
                 label="Source Character Image",
                 type='pil',
-                height=640
+                height=640,
+                width=640
                 # Removed fixed height to allow natural aspect ratio
                 # height=400 # <-- Removed this
             )
