@@ -48,8 +48,8 @@ os.makedirs("assets", exist_ok=True)
 # for the examples to load correctly.
 # You might need to download them separately if they are not included.
 # Example placeholder check (replace with actual file download/copy if needed):
-if not os.path.exists("assets/girl.jpg"):
-    print("Warning: assets/girl.jpg not found. Examples may fail.")
+if not os.path.exists("assets/boy2.jpg"):
+    print("Warning: assets/boy2.jpg not found. Examples may fail.")
     # You could add code here to download example images if necessary
 if not os.path.exists("assets/boy.jpg"):
     print("Warning: assets/boy.jpg not found. Examples may fail.")
@@ -198,26 +198,26 @@ def get_example():
     # IMPORTANT: Ensure these files exist in the 'assets' directory
     return [
         [
-            "assets/girl.jpg",
-            "A girl is playing a guitar in street, detailed illustration",
+            "assets/boy2.jpg",
+            "A man is playing a guitar in street, detailed illustration",
             0.9,
             'Makoto Shinkai style',
         ],
         [
             "assets/boy.jpg",
-            "A boy is riding a bike in snow, cinematic lighting",
+            "A man is riding a bike in snow, cinematic lighting",
             0.9,
             'Makoto Shinkai style',
         ],
          [
-            "assets/girl.jpg", # Example using Ghibli style
-            "A girl is reading a book under a large tree, Ghibli style",
+            "assets/boy2.jpg", # Example using Ghibli style
+            "A man is reading a book under a large tree, Ghibli style",
             1.0,
             'Ghibli style',
         ],
          [
             "assets/boy.jpg", # Example using no style
-            "photo of a boy holding a camera",
+            "photo of a man holding a camera",
             1.1,
             'None',
         ],
@@ -343,12 +343,7 @@ def create_image(input_image,
     return images
 
 # --- Gradio UI ---
-description = r"""
-# InstantCharacter SECourses Improved App V5
-
-Generate images with a specific character based on a source image, optionally applying artistic styles.
-[Patreon Post](https://www.patreon.com/posts/126995127)
-"""
+description = r""" InstantCharacter SECourses Improved App V6 - https://www.patreon.com/posts/126995127"""
 
 css = """
 footer {visibility: hidden;}
@@ -437,7 +432,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     print("Launching Gradio app...")
-    block.queue(max_size=10) # Enable queue for handling concurrent requests
-    block.launch(inbrowser=True, share=args.share, server_name=args.host, server_port=args.port)
+    block.queue(max_size=100) # Enable queue for handling concurrent requests
+    block.launch(inbrowser=True, share=args.share)
 
 # --- END OF REVISED FILE secourses_app.py ---
