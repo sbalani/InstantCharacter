@@ -210,11 +210,6 @@ def create_image(input_image,
     
     return images
 
-# Description
-title = r"""
-InstantCharacter SECourses Improved App V1
-"""
-
 description = r"""
 InstantCharacter SECourses Improved App V1 - https://www.patreon.com/posts/126995127
 """
@@ -222,8 +217,6 @@ InstantCharacter SECourses Improved App V1 - https://www.patreon.com/posts/12699
 block = gr.Blocks(css="footer {visibility: hidden}").queue(max_size=10, api_open=False)
 with block:
     
-    # description
-    gr.Markdown(title)
     gr.Markdown(description)
     
     with gr.Tabs():
@@ -273,7 +266,7 @@ with block:
         inputs=[image_pil, prompt, scale, style_mode],
         fn=run_for_examples,
         outputs=[generated_image],
-        cache_examples=True,
+        cache_examples=False,
     )
 
 if __name__ == '__main__':
