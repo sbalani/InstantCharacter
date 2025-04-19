@@ -520,7 +520,7 @@ def run_generation_loop(input_image,
 
 # --- Gradio UI Definition ---
 description = r"""
-InstantCharacter SECourses Improved App V8 - https://www.patreon.com/posts/126995127
+InstantCharacter SECourses Improved App V9 - https://www.patreon.com/posts/126995127
 """
 
 css = """
@@ -540,8 +540,8 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
             image_pil = gr.Image(
                 label="Source Character Image",
                 type='pil',
-                height=640,
-                width=640
+                height=768,
+                width=768
                 # Removed fixed height to allow natural aspect ratio
                 # height=400 # <-- Removed this
             )
@@ -589,7 +589,7 @@ with gr.Blocks(css=css, theme=gr.themes.Soft()) as block:
                 object_fit="contain",
                 columns=2, # Show potentially multiple images side-by-side
                 preview=True, # Allow clicking image for larger view,
-                height=640
+                height=768
             )
             open_folder_button = gr.Button("Open Outputs Folder")
                         # --- Advanced Options ---
