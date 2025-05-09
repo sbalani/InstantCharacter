@@ -1,0 +1,17 @@
+*__pycache__*
+style_lora/*
+*.bin
+*.safetensors
+flux*.png
+output/
+infer_style.py
+checkpoints/style_lora/
+.vs/
+checkpoints
+models/hub/
+models/version.txt
+venv/
+models/models--ZhengPeng7--BiRefNet/
+models/modules/
+models/models--*
+tmp
