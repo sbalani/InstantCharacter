@@ -9,6 +9,8 @@ import platform # Added for opening folder
 import subprocess # Added for opening folder
 import glob # Added for finding LoRA files
 import gc # Added for garbage collection
+import logging # Added for proper logging
+import psutil # Added for system resource monitoring
 from PIL import Image
 
 import gradio as gr
@@ -16,9 +18,18 @@ from huggingface_hub import hf_hub_download, HfApi
 from transformers import AutoModelForImageSegmentation
 from torchvision import transforms
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
 # Get Hugging Face token from environment variable
 HF_TOKEN = os.getenv("HF_TOKEN")
 if not HF_TOKEN:
+    logger.error("HF_TOKEN environment variable not set. Please set it with your Hugging Face API token.")
     raise ValueError("HF_TOKEN environment variable not set. Please set it with your Hugging Face API token.")
 
 # Set the token in environment for huggingface_hub
@@ -31,7 +42,7 @@ api = HfApi(token=HF_TOKEN)
 try:
     from pipeline import InstantCharacterFluxPipeline
 except ImportError:
-    print("Error: 'pipeline.py' not found. Please ensure it's in the same directory or your Python path.")
+    logger.error("Error: 'pipeline.py' not found. Please ensure it's in the same directory or your Python path.")
     exit()
 
 
@@ -53,15 +64,15 @@ print(f"Using device: {device}")
 print(f"Using dtype: {dtype}")
 
 # Create output directory
-print(f"Ensuring output directory '{OUTPUT_DIR}' exists...")
+logger.info(f"Ensuring output directory '{OUTPUT_DIR}' exists...")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Create LoRAs directory
-print(f"Ensuring LoRAs directory '{LORAS_DIR}' exists...")
+logger.info(f"Ensuring LoRAs directory '{LORAS_DIR}' exists...")
 os.makedirs(LORAS_DIR, exist_ok=True)
 
 # --- Model Loading ---
-print("Downloading/Loading weights...")
+logger.info("Downloading/Loading weights...")
 # Use try-except blocks for better error handling during download/load
 try:
     ip_adapter_path = hf_hub_download(repo_id="Tencent/InstantCharacter", filename="instantcharacter_ip-adapter.bin", token=HF_TOKEN)
@@ -81,7 +92,7 @@ try:
     # Download default LoRAs if they don't already exist in the loras folder
     makoto_style_lora_path = os.path.join(LORAS_DIR, makoto_lora_filename)
     if not os.path.exists(makoto_style_lora_path):
-        print(f"Downloading Makoto Shinkai style LoRA to {LORAS_DIR}...")
+        logger.info(f"Downloading Makoto Shinkai style LoRA to {LORAS_DIR}...")
         downloaded_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", 
                                          filename=makoto_lora_filename,
                                          token=HF_TOKEN)
@@ -90,7 +101,7 @@ try:
     
     ghibli_style_lora_path = os.path.join(LORAS_DIR, ghibli_lora_filename)
     if not os.path.exists(ghibli_style_lora_path):
-        print(f"Downloading Ghibli style LoRA to {LORAS_DIR}...")
+        logger.info(f"Downloading Ghibli style LoRA to {LORAS_DIR}...")
         downloaded_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", 
                                          filename=ghibli_lora_filename,
                                          token=HF_TOKEN)
@@ -100,7 +111,7 @@ try:
     # Add the new Ghibli Anime Art Style LoRA
     ghibli_anime_style_lora_path = os.path.join(LORAS_DIR, ghibli_anime_lora_filename)
     if not os.path.exists(ghibli_anime_style_lora_path):
-        print(f"Downloading Ghibli Anime Art Style LoRA to {LORAS_DIR}...")
+        logger.info(f"Downloading Ghibli Anime Art Style LoRA to {LORAS_DIR}...")
         downloaded_path = hf_hub_download(repo_id="BestModelsv2/flux_loras", 
                                          filename=ghibli_anime_lora_filename,
                                          token=HF_TOKEN)
@@ -108,10 +119,10 @@ try:
         shutil.copy(downloaded_path, ghibli_anime_style_lora_path)
     
 except Exception as e:
-    print(f"Error downloading or finding model weights: {e}")
-    print("Please check your internet connection and Hugging Face Hub access.")
+    logger.error(f"Error downloading or finding model weights: {e}")
+    logger.error("Please check your internet connection and Hugging Face Hub access.")
     exit()
-print("Finished downloading/loading weights.")
+logger.info("Finished downloading/loading weights.")
 
 # --- Example Asset Check ---
 print("Ensuring 'assets' directory exists...")
@@ -125,42 +136,84 @@ if not os.path.exists("assets/boy.jpg"):
     print("Warning: assets/boy.jpg not found. Examples may fail or be skipped.")
 # --- END IMPORTANT ---
 
-# --- Initialize Pipelines and Models ---
-print("Initializing InstantCharacter pipeline...")
-try:
-    pipe = InstantCharacterFluxPipeline.from_pretrained(base_model, torch_dtype=dtype)
-    pipe.to(device)
-except Exception as e:
-    print(f"Error initializing the main pipeline: {e}")
-    exit()
-print("Pipeline initialized.")
+def log_system_resources():
+    """Log current system resource usage."""
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    gpu_memory = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0
+    gpu_memory_gb = gpu_memory / (1024**3)
+    
+    logger.debug(f"CPU Memory: {memory_info.rss / (1024**3):.2f} GB")
+    logger.debug(f"GPU Memory: {gpu_memory_gb:.2f} GB")
+    if torch.cuda.is_available():
+        logger.debug(f"GPU Device: {torch.cuda.get_device_name()}")
+        logger.debug(f"CUDA Version: {torch.version.cuda}")
 
-print("Initializing adapters...")
+# --- Initialize Pipelines and Models ---
+logger.info("Initializing InstantCharacter pipeline...")
 try:
+    log_system_resources()
+    logger.info("Loading base model and preparing pipeline...")
+    start_time = time.time()
+    pipe = InstantCharacterFluxPipeline.from_pretrained(base_model, torch_dtype=dtype)
+    logger.info(f"Base model loaded in {time.time() - start_time:.2f} seconds")
+    log_system_resources()
+    
+    logger.info("Moving pipeline to device...")
+    start_time = time.time()
+    pipe.to(device)
+    logger.info(f"Pipeline moved to device in {time.time() - start_time:.2f} seconds")
+    log_system_resources()
+    
+    logger.info("Pipeline initialization complete.")
+except Exception as e:
+    logger.error(f"Error initializing the main pipeline: {e}")
+    logger.error("Full error details:", exc_info=True)
+    exit()
+
+logger.info("Initializing adapters...")
+try:
+    logger.info("Setting up image encoders and IP-Adapter...")
+    start_time = time.time()
     pipe.init_adapter(
         image_encoder_path=image_encoder_path,
         image_encoder_2_path=image_encoder_2_path,
         subject_ipadapter_cfg=dict(subject_ip_adapter_path=ip_adapter_path, nb_token=1024),
     )
+    logger.info(f"Adapters initialized in {time.time() - start_time:.2f} seconds")
+    log_system_resources()
+    logger.info("Adapters initialized successfully.")
 except Exception as e:
-    print(f"Error initializing adapters: {e}")
+    logger.error(f"Error initializing adapters: {e}")
+    logger.error("Full error details:", exc_info=True)
     exit()
-print("Adapters initialized.")
 
-print("Loading matting model...")
+logger.info("Loading matting model...")
 try:
+    logger.info("Loading BiRefNet model for background removal...")
+    start_time = time.time()
     birefnet = AutoModelForImageSegmentation.from_pretrained(birefnet_path, trust_remote_code=True)
+    logger.info(f"BiRefNet model loaded in {time.time() - start_time:.2f} seconds")
+    log_system_resources()
+    
+    logger.info("Moving matting model to device...")
+    start_time = time.time()
     birefnet.to(device)
     birefnet.eval()
+    logger.info(f"Matting model moved to device in {time.time() - start_time:.2f} seconds")
+    log_system_resources()
+    
+    logger.info("Setting up image transforms for matting...")
     birefnet_transform_image = transforms.Compose([
         transforms.Resize((1024, 1024)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
+    logger.info("Matting model loaded and configured successfully.")
 except Exception as e:
-    print(f"Error loading matting model: {e}")
+    logger.error(f"Error loading matting model: {e}")
+    logger.error("Full error details:", exc_info=True)
     exit()
-print("Matting model loaded.")
 
 # --- LoRA Management Functions ---
 
@@ -380,17 +433,17 @@ def save_image(image: Image.Image, seed: int, index: int, prompt: str = "output"
     filename = f"{OUTPUT_DIR}/img_{seed}_{index}_{timestamp}_{safe_prompt}.png"
     try:
         image.save(filename)
-        print(f"Saved image: {filename}")
+        logger.info(f"Saved image: {filename}")
         return filename
     except Exception as e:
-        print(f"Error saving image {filename}: {e}")
+        logger.error(f"Error saving image {filename}: {e}")
         return None
 
 def open_folder(folder_path):
     """Opens the specified folder in the default file explorer."""
-    print(f"Attempting to open folder: {folder_path}")
+    logger.info(f"Attempting to open folder: {folder_path}")
     if not os.path.isdir(folder_path):
-        print(f"Error: Folder '{folder_path}' does not exist.")
+        logger.error(f"Error: Folder '{folder_path}' does not exist.")
         gr.Warning(f"Output folder '{folder_path}' not found. Generate images first.")
         return
 
@@ -402,13 +455,14 @@ def open_folder(folder_path):
             subprocess.run(["open", os.path.abspath(folder_path)], check=True)
         else: # Linux and other Unix-like
             subprocess.run(["xdg-open", os.path.abspath(folder_path)], check=True)
-        print(f"Opened folder: {folder_path}")
+        logger.info(f"Opened folder: {folder_path}")
     except FileNotFoundError:
          # This might happen if 'xdg-open' or 'open' isn't available
+         logger.warning(f"Could not automatically open the folder. Please navigate to: {os.path.abspath(folder_path)}")
          gr.Warning(f"Could not automatically open the folder. Please navigate to: {os.path.abspath(folder_path)}")
     except Exception as e:
+        logger.error(f"Failed to open folder: {e}")
         gr.Error(f"Failed to open folder: {e}")
-        print(f"Error opening folder: {e}")
 
 def run_generation_loop(input_image,
                         prompt,
@@ -422,23 +476,24 @@ def run_generation_loop(input_image,
     """Handles the image generation loop, seed management, and saving."""
 
     if input_image is None:
+        logger.warning("Input image not provided!")
         gr.Warning("Input image not provided!")
         return [], seed # Return empty list and original seed
 
-    print(f"Starting generation loop: {num_generations} image(s)")
+    logger.info(f"Starting generation loop: {num_generations} image(s)")
     try:
         processed_image = remove_bkg(input_image)
     except Exception as e:
-        print(f"Error during background removal: {e}")
+        logger.error(f"Error during background removal: {e}")
         gr.Error(f"Failed to process input image: {e}")
         return [], seed # Return empty list and original seed
 
     all_generated_images = []
-    current_seed = int(seed) # Ensure seed is integer
+    current_seed = int(seed)
 
     for i in range(int(num_generations)):
         iteration_seed = random.randint(0, MAX_SEED) if randomize_seed else current_seed
-        print(f"--- Generation {i+1}/{int(num_generations)} --- Seed: {iteration_seed} ---")
+        logger.info(f"--- Generation {i+1}/{int(num_generations)} --- Seed: {iteration_seed} ---")
 
         generator = torch.Generator(device=device).manual_seed(iteration_seed)
 
@@ -457,7 +512,7 @@ def run_generation_loop(input_image,
         images_batch = [] # To store images from this iteration
         try:
             if style_mode == "None" or style_mode is None:
-                print("Generating image without specific style LoRA...")
+                logger.info("Generating image without specific style LoRA...")
                 images_batch = pipe(**common_args).images
             else:
                 # Look up the LoRA path from our mapping
@@ -469,7 +524,7 @@ def run_generation_loop(input_image,
                 if style_mode in lora_path_mapping:
                     lora_file_path = lora_path_mapping[style_mode]
                     trigger = style_mode.lower()  # Use the display name as trigger
-                    print(f"Using LoRA file: {lora_file_path}")
+                    logger.info(f"Using LoRA file: {lora_file_path}")
                 else:
                     # Try legacy style lookup for backward compatibility
                     if style_mode == 'Makoto Shinkai Style':
@@ -483,11 +538,11 @@ def run_generation_loop(input_image,
                         trigger = 'ghibli anime art style'
 
                 if lora_file_path and os.path.exists(lora_file_path):
-                    print(f"Generating image with style: {style_mode}")
+                    logger.info(f"Generating image with style: {style_mode}")
                     # Add trigger phrase if not already present (case-insensitive check)
                     if trigger and trigger.lower() not in common_args["prompt"].lower():
                         final_prompt = f"{common_args['prompt']}, {trigger}"
-                        print(f"Adding trigger phrase to prompt: '{trigger}'")
+                        logger.info(f"Adding trigger phrase to prompt: '{trigger}'")
                         common_args["prompt"] = final_prompt
 
                     images_batch = pipe.with_style_lora(
@@ -497,11 +552,11 @@ def run_generation_loop(input_image,
                     ).images
                 else:
                     # Fallback if style selected but file doesn't exist
-                    print(f"Warning: Style '{style_mode}' selected but LoRA file '{lora_file_path}' not found. Generating without style LoRA.")
+                    logger.warning(f"Style '{style_mode}' selected but LoRA file '{lora_file_path}' not found. Generating without style LoRA.")
                     images_batch = pipe(**common_args).images
 
 
-            print(f"Iteration {i+1} complete. Generated {len(images_batch)} image(s).")
+            logger.info(f"Iteration {i+1} complete. Generated {len(images_batch)} image(s).")
 
             # --- Save and Collect Images ---
             if isinstance(images_batch, list):
@@ -515,9 +570,9 @@ def run_generation_loop(input_image,
                       all_generated_images.append(images_batch)
 
         except Exception as e:
-            print(f"!!! Error during pipeline execution (Iteration {i+1}): {e}")
+            logger.error(f"Error during pipeline execution (Iteration {i+1}): {e}")
             import traceback
-            traceback.print_exc() # Print detailed traceback for debugging
+            logger.error(traceback.format_exc()) # Log detailed traceback for debugging
             gr.Warning(f"Image generation failed on iteration {i+1}: Check logs for details.")
             # Continue to next iteration if possible, or break if fatal
 
@@ -528,17 +583,17 @@ def run_generation_loop(input_image,
         # --- Clear CUDA cache to prevent VRAM leaks ---
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print("CUDA cache cleared")
+            logger.debug("CUDA cache cleared")
             
         # --- Run garbage collection to free memory ---
         gc.collect()
-        print("Memory garbage collection performed")
+        logger.debug("Memory garbage collection performed")
         
         # Sleep a tiny bit to ensure memory is properly released
         time.sleep(0.5)
 
 
-    print(f"--- Generation loop finished. Total images generated: {len(all_generated_images)} ---")
+    logger.info(f"--- Generation loop finished. Total images generated: {len(all_generated_images)} ---")
 
     # Final cleanup after all generations
     if torch.cuda.is_available():
@@ -717,13 +772,20 @@ if __name__ == '__main__':
     parser.add_argument('--share', action='store_true', help='Enable Gradio sharing link')
     parser.add_argument('--host', type=str, default=None, help='Host name to bind to (e.g., 0.0.0.0 for public access)')
     parser.add_argument('--port', type=int, default=None, help='Port number to use (default: Gradio chooses)')
+    parser.add_argument('--log-level', type=str, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                      help='Set the logging level')
     args = parser.parse_args()
 
-    print("Launching Gradio app...")
+    # Set logging level from command line argument
+    logging.getLogger().setLevel(getattr(logging, args.log_level))
+
+    logger.info("Launching Gradio app...")
     block.queue(max_size=10) # Enable queue for handling concurrent requests (adjust size as needed)
     block.launch(
         inbrowser=True,
-        share=args.share
-        )
+        share=args.share,
+        host=args.host,
+        port=args.port
+    )
 
 # --- END OF REVISED FILE secourses_app.py ---
