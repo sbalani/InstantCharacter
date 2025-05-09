@@ -12,9 +12,20 @@ import gc # Added for garbage collection
 from PIL import Image
 
 import gradio as gr
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, HfApi
 from transformers import AutoModelForImageSegmentation
 from torchvision import transforms
+
+# Get Hugging Face token from environment variable
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise ValueError("HF_TOKEN environment variable not set. Please set it with your Hugging Face API token.")
+
+# Set the token in environment for huggingface_hub
+os.environ["HUGGING_FACE_HUB_TOKEN"] = HF_TOKEN
+
+# Initialize Hugging Face API client
+api = HfApi(token=HF_TOKEN)
 
 # Ensure pipeline module is accessible (e.g., in the same directory or Python path)
 try:
@@ -53,7 +64,7 @@ os.makedirs(LORAS_DIR, exist_ok=True)
 print("Downloading/Loading weights...")
 # Use try-except blocks for better error handling during download/load
 try:
-    ip_adapter_path = hf_hub_download(repo_id="Tencent/InstantCharacter", filename="instantcharacter_ip-adapter.bin")
+    ip_adapter_path = hf_hub_download(repo_id="Tencent/InstantCharacter", filename="instantcharacter_ip-adapter.bin", token=HF_TOKEN)
     base_model = 'black-forest-labs/FLUX.1-dev'
     image_encoder_path = 'google/siglip-so400m-patch14-384'
     image_encoder_2_path = 'facebook/dinov2-giant'
@@ -72,7 +83,8 @@ try:
     if not os.path.exists(makoto_style_lora_path):
         print(f"Downloading Makoto Shinkai style LoRA to {LORAS_DIR}...")
         downloaded_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", 
-                                         filename=makoto_lora_filename)
+                                         filename=makoto_lora_filename,
+                                         token=HF_TOKEN)
         # Copy the downloaded file to our loras directory
         shutil.copy(downloaded_path, makoto_style_lora_path)
     
@@ -80,7 +92,8 @@ try:
     if not os.path.exists(ghibli_style_lora_path):
         print(f"Downloading Ghibli style LoRA to {LORAS_DIR}...")
         downloaded_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", 
-                                         filename=ghibli_lora_filename)
+                                         filename=ghibli_lora_filename,
+                                         token=HF_TOKEN)
         # Copy the downloaded file to our loras directory
         shutil.copy(downloaded_path, ghibli_style_lora_path)
     
@@ -89,7 +102,8 @@ try:
     if not os.path.exists(ghibli_anime_style_lora_path):
         print(f"Downloading Ghibli Anime Art Style LoRA to {LORAS_DIR}...")
         downloaded_path = hf_hub_download(repo_id="BestModelsv2/flux_loras", 
-                                         filename=ghibli_anime_lora_filename)
+                                         filename=ghibli_anime_lora_filename,
+                                         token=HF_TOKEN)
         # Copy the downloaded file to our loras directory
         shutil.copy(downloaded_path, ghibli_anime_style_lora_path)
     
