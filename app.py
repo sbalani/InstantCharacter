@@ -1,14 +1,26 @@
 import torch
 import random
 import numpy as np
+import os
 from PIL import Image
 
 import gradio as gr
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, HfApi
 from transformers import AutoModelForImageSegmentation
 from torchvision import transforms
 
 from pipeline import InstantCharacterFluxPipeline
+
+# Get Hugging Face token from environment variable
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise ValueError("HF_TOKEN environment variable not set. Please set it with your Hugging Face API token.")
+
+# Set the token in environment for huggingface_hub
+os.environ["HUGGING_FACE_HUB_TOKEN"] = HF_TOKEN
+
+# Initialize Hugging Face API client
+api = HfApi(token=HF_TOKEN)
 
 # global variable
 MAX_SEED = np.iinfo(np.int32).max
@@ -16,35 +28,51 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 dtype = torch.float16 if str(device).__contains__("cuda") else torch.float32
 
 # pre-trained weights
-ip_adapter_path = hf_hub_download(repo_id="Tencent/InstantCharacter", filename="instantcharacter_ip-adapter.bin")
-base_model = 'black-forest-labs/FLUX.1-dev'
-image_encoder_path = 'google/siglip-so400m-patch14-384'
-image_encoder_2_path = 'facebook/dinov2-giant'
-birefnet_path = 'ZhengPeng7/BiRefNet'
-makoto_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", filename="Makoto_Shinkai_style.safetensors")
-ghibli_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", filename="ghibli_style.safetensors")
+try:
+    ip_adapter_path = hf_hub_download(repo_id="Tencent/InstantCharacter", filename="instantcharacter_ip-adapter.bin", token=HF_TOKEN)
+    base_model = 'black-forest-labs/FLUX.1-dev'
+    image_encoder_path = 'google/siglip-so400m-patch14-384'
+    image_encoder_2_path = 'facebook/dinov2-giant'
+    birefnet_path = 'ZhengPeng7/BiRefNet'
+    makoto_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Makoto-Shinkai", filename="Makoto_Shinkai_style.safetensors", token=HF_TOKEN)
+    ghibli_style_lora_path = hf_hub_download(repo_id="InstantX/FLUX.1-dev-LoRA-Ghibli", filename="ghibli_style.safetensors", token=HF_TOKEN)
+except Exception as e:
+    print(f"Error downloading model weights: {e}")
+    print("Please check your internet connection and Hugging Face Hub access.")
+    exit()
 
 # init InstantCharacter pipeline
-pipe = InstantCharacterFluxPipeline.from_pretrained(base_model, torch_dtype=torch.bfloat16)
-pipe.to(device)
+try:
+    pipe = InstantCharacterFluxPipeline.from_pretrained(base_model, torch_dtype=torch.bfloat16)
+    pipe.to(device)
+except Exception as e:
+    print(f"Error initializing pipeline: {e}")
+    exit()
 
 # load InstantCharacter
-pipe.init_adapter(
-    image_encoder_path=image_encoder_path, 
-    image_encoder_2_path=image_encoder_2_path, 
-    subject_ipadapter_cfg=dict(subject_ip_adapter_path=ip_adapter_path, nb_token=1024), 
-)
+try:
+    pipe.init_adapter(
+        image_encoder_path=image_encoder_path, 
+        image_encoder_2_path=image_encoder_2_path, 
+        subject_ipadapter_cfg=dict(subject_ip_adapter_path=ip_adapter_path, nb_token=1024), 
+    )
+except Exception as e:
+    print(f"Error initializing adapters: {e}")
+    exit()
 
 # load matting model
-birefnet = AutoModelForImageSegmentation.from_pretrained(birefnet_path, trust_remote_code=True)
-birefnet.to('cuda')
-birefnet.eval()
-birefnet_transform_image = transforms.Compose([
-    transforms.Resize((1024, 1024)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
-
+try:
+    birefnet = AutoModelForImageSegmentation.from_pretrained(birefnet_path, trust_remote_code=True)
+    birefnet.to('cuda')
+    birefnet.eval()
+    birefnet_transform_image = transforms.Compose([
+        transforms.Resize((1024, 1024)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+except Exception as e:
+    print(f"Error loading matting model: {e}")
+    exit()
 
 def remove_bkg(subject_image):
 
