@@ -784,8 +784,8 @@ if __name__ == '__main__':
     block.launch(
         inbrowser=True,
         share=args.share,
-        host=args.host,
-        port=args.port
+        server_name=args.host if args.host else None,
+        server_port=args.port if args.port else None
     )
 
 # --- END OF REVISED FILE secourses_app.py ---
