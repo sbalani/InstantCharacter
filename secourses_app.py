@@ -782,10 +782,12 @@ if __name__ == '__main__':
     logger.info("Launching Gradio app...")
     block.queue(max_size=10) # Enable queue for handling concurrent requests (adjust size as needed)
     block.launch(
-        inbrowser=True,
-        share=args.share,
-        server_name=args.host if args.host else None,
-        server_port=args.port if args.port else None
+        inbrowser=False,  # Disable inbrowser since we're on RunPod
+        share=False,      # Disable share since we're using RunPod's proxy
+        server_name="0.0.0.0",  # Bind to all interfaces
+        server_port=7860,       # Use the standard RunPod port
+        show_error=True,        # Show detailed errors
+        show_api=False         # Hide API docs for cleaner interface
     )
 
 # --- END OF REVISED FILE secourses_app.py ---
