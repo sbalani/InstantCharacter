@@ -606,7 +606,7 @@ def run_generation_loop(input_image,
 
 # --- Gradio UI Definition ---
 description = r"""
-InstantCharacter SECourses Improved App V10 - https://www.patreon.com/posts/126995127
+InstantCharacter EndangeredAI  - https://www.patreon.com/posts/128780210
 """
 
 css = """
